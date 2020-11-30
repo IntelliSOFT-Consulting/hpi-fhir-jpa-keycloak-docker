@@ -1,0 +1,79 @@
+version: "3"
+services:
+  hapi-fhir:
+    image: intellisoftkenya/hapi-fhir
+    container_name: hapi-fhir
+    restart: on-failure
+    ports:
+      - "8080:8080"
+    environment:
+      OAUTH_URL: ${OAUTH_URL}
+      OAUTH_ENABLE: ${OAUTH_ENABLE}
+
+  # PostgreSQL database for HAPI FHIR
+  hapi-fhir-postgres:
+    ports:
+      - '5436:5432'
+    image: postgres
+    container_name: hapi-fhir-postgres
+    volumes:
+      - hapi-fhir-postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${FHIR_DB}
+      POSTGRES_USER: ${FHIR_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${FHIR_POSTGRES_PASSWORD}
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  mysql:
+    image: mysql:5.7
+    container_name: mysql
+    volumes:
+      - mysql_data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak
+    environment:
+      DB_VENDOR: ${DB_VENDOR}
+      DB_ADDR: ${DB_ADDR}
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      KEYCLOAK_USER: ${KEYCLOAK_USER}
+      KEYCLOAK_PASSWORD: ${KEYCLOAK_PASSWORD}
+    ports:
+      - 9090:8080
+    depends_on:
+      - mysql
+
+  auth:
+    image:  intellisoft/hapi-auth
+    container_name: auth
+    environment:
+      KEYCLOAK_URL: ${KEYCLOAK_URL}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+    ports:
+      - 8084:8084
+    depends_on:
+      - keycloak
+    restart: always
+
+volumes:
+  hapi-fhir-postgres:
+  mysql_data:
+
+networks:
+  default:
+    external:
+      name: hapi-fhir
